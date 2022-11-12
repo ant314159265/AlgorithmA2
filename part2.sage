@@ -198,7 +198,7 @@ def explore(its,m,N,k,l,R,T,Q):
             ysamples.append(currSample)
         A1 = AlgorithmA2(ysamples,l,N,Q,R,T,False)
         if A1:
-            #https://doc.sagemath.org/html/en/reference/matrices/sage/matrix/matrix2.html
+            #doc.sagemath.org/html/en/reference/matrices/sage/matrix/matrix2.html
             A1ech = Matrix(QQ,A1.kernel(algorithm='generic').basis())[:,:-m]
             if A1ech == Hech:
                 success += 1
@@ -274,66 +274,94 @@ if sample:
     print('Repeated tests scored %i - %i - %i.\n' % (su,fa,no))
     sys.exit()
 
+
+# the commented section in this function provides
+# the ability to perform a secondary search using
+# a larger value of Q, if desired
+
+# any of the other modifications is a tradeoff between
+# accuracy (log accuracy is not super important) and time
 def searchAll(k,l,m,N,numTests,threshold,verbose):
     totalTests = 0
     done = False
     t1 = time.time()
     limit = 7200
-    alpha = sqrt(k)/1.6
+    alpha = sqrt(k)
     resetBeta = True
 
     while not done:
         if time.time() - t1 > limit:
             print('Timeout: %i seconds elapsed.' % (limit))
             return 0,0,0
-        R = round(N*alpha)
-        if resetBeta:
-            beta = 1
+        R = max(1,round(N*alpha))
 
-        beginGammaSearch = False
-        while beta < 10**40:
-            beta *= 2.5
-            T = round(beta*(R*(N**(k/m))))
-            Q = 2*R*T*(N**k)
-            su,fa,no,_ = explore(numTests,m,N,k,l,R,T,Q)
-            totalTests += 1
-            if verbose:
-                print("(%i,%i,%i): N = %.0E, a = %.2f, b = %.2E. Q = %.1E. Score: %i-%i-%i."
-                    % (k,l,m,N,alpha,beta,Q,su,fa,no))
-            if su >= numTests*threshold:
-                beginGammaSearch = True
-                break
-        
-        resetBeta = True
-        if not beginGammaSearch:
-            alpha += 0.2
+        # here you can modify the starting value of beta
+        beta = 10**13
+        # if resetBeta:
+        #     beta = 1
 
-        if beginGammaSearch:
-            if verbose:
-                print('R and T found. Searching for Q...')
-            gamma = 1
-            gammaFound = False
-            while gamma < 50:
-                gamma *= 1.2
-                Q = round(gamma*2*R*T)
+        # beginGammaSearch = False
+        # here you can modify the upper threshold when searching
+        # for beta
+        while beta < 10**25:
+            try:
+                # here you can modify the speed at which you
+                # search for beta
+                beta *= 1.3
+                T = round(beta*R*(N**(k/m)))
+                Q = R*T*4 # 4 can be smaller or larger, no significant affect
                 su,fa,no,_ = explore(numTests,m,N,k,l,R,T,Q)
                 totalTests += 1
                 if verbose:
-                    print("g = %.3f. Score: %i - %i - %i." % (gamma,su,fa,no))
+                    print("(%i,%i,%i): N = %.0E, a = %.2f, b = %.3E. Q = %.3E. Score: %i-%i-%i."
+                        % (k,l,m,N,alpha,beta,Q,su,fa,no))
                 if su >= numTests*threshold:
-                    gammaFound = True
+                    done = True
+                    # beginGammaSearch = True
                     break
-            if gammaFound:
-                done = True
-            else:
-                resetBeta = False
-                if verbose:
-                    print('Q not found. Insufficient R and T. Retrying...')
+            except KeyboardInterrupt:
+                print("Exiting beta loop")
+                break
+
+        
+        # resetBeta = True
+
+        # here you can modify the alpha increment
+        alpha += 0.03
+        # if not beginGammaSearch:
+        #     alpha += 0.03
+
+        # if beginGammaSearch:
+        #     if verbose:
+        #         print('R and T found. Searching for Q...')
+        #     gamma = 1/1.2
+        #     gammaFound = False
+        #     while gamma < 20:
+        #         try:
+        #             gamma *= 1.2
+        #             Q = round(gamma*2*R*T)
+        #             su,fa,no,_ = explore(numTests,m,N,k,l,R,T,Q)
+        #             totalTests += 1
+        #             if verbose:
+        #                 print("g = %.3f. Score: %i - %i - %i." % (gamma,su,fa,no))
+        #             if su >= numTests*threshold:
+        #                 gammaFound = True
+        #                 break
+        #         except KeyboardInterrupt:
+        #             print('Exiting gamma loop')
+        #             break
+        #     if gammaFound:
+        #         done = True
+        #     else:
+        #         resetBeta = False
+        #         if verbose:
+        #             print('Q not found. Insufficient R and T. Retrying...')
 
     if verbose:
         print('Done!')
 
-    return alpha,beta,gamma,Q,totalTests
+    # return alpha,beta,gamma,Q,totalTests
+    return alpha,beta,Q,totalTests
 
 numTests = 20
 threshold = .666
@@ -346,17 +374,19 @@ with open('logs\%s.csv'%(time.ctime()).replace(':','-'),'w') as log:
     numIts = 0
     t1 = time.time()
     log.write('k,l,m,N,alpha,beta,gamma,Q,time\n')
-    ks = [4,8]
+    ks = [18,20]
     for k in ks:
-        ells = set([round(k/2)])#k-1
+        ells = set([1])#k-1round(k/2)
         for l in ells:
-            Ns = [10**i for i in range(1,10)]#,10000,1000000]
+            Ns = [10**2]#[10**i for i in range(2,11)]#[40,80]#
             for N in Ns:
-                ms = [1,4]
+                ms = [1]
                 for m in ms:
                     t0 = time.time()
-                    alpha,beta,gamma,Q,tTs = searchAll(k,l,m,N,numTests,threshold,verbose)
+                    # alpha,beta,gamma,Q,tTs = searchAll(k,l,m,N,numTests,threshold,verbose)
+                    alpha,beta,Q,tTs = searchAll(k,l,m,N,numTests,threshold,verbose)
                     numIts += tTs
-                    logline = '%i,%i,%i,%.0E,%.3f,%.2E,%.3f,%.3E,%.1f\n' % (k,l,m,N,alpha,beta,gamma,Q,time.time()-t0)
+                    # logline = '%i,%i,%i,%.0E,%.3f,%.2E,%.3f,%.3E,%.1f\n' % (k,l,m,N,alpha,beta,gamma,Q,time.time()-t0)
+                    logline = '%i,%i,%i,%.0E,%.3f,%.2E,%.3E,%.1f\n' % (k,l,m,N,alpha,beta,Q,time.time()-t0)
                     log.write(logline)
     print('%i tests done in %.3f seconds.' % (numIts*numTests,time.time()-t1))
